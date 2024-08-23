@@ -8,7 +8,6 @@ package main
 */
 import "C"
 import (
-	"fmt"
 	"largo/src/builder"
 	"largo/src/console"
 	"largo/src/math"
@@ -143,7 +142,7 @@ func main() {
 		C.JSStringGetUTF8CString(resultStringJS, &resultCString[0], bufferSize)
 
 		// Imprimir el resultado.
-		fmt.Printf("%s\n", C.GoString(&resultCString[0]))
+		// fmt.Printf("%s\n", C.GoString(&resultCString[0]))
 	}
 
 	// Liberar el contexto JavaScript global.
