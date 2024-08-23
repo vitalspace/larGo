@@ -1,2 +1,6 @@
-const { name, age } = require("./other_index.js")
-print(name, age)
+let b = new Builder('Alice', 25);
+b.show();
+b.modify('Bob', 30);
+b.show();
+
+console.log(b.age)

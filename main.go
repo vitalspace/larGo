@@ -9,6 +9,7 @@ package main
 import "C"
 import (
 	"fmt"
+	"largo/src/builder"
 	"largo/src/console"
 	"largo/src/math"
 	"largo/src/require"
@@ -32,27 +33,88 @@ func createCustomFunction(context C.JSGlobalContextRef, globalObject C.JSObjectR
 	C.JSStringRelease(functionString)
 }
 
+// createCustomClass crea una clase JavaScript personalizada con propiedades y métodos.
+func createCustomClass(context C.JSGlobalContextRef, className string, constructor C.JSObjectCallAsConstructorCallback, finalize C.JSObjectFinalizeCallback, methods map[string]C.JSObjectCallAsFunctionCallback) {
+	// Definir la clase en C.
+	classDefinition := C.kJSClassDefinitionEmpty
+	classDefinition.callAsConstructor = constructor
+	classDefinition.finalize = finalize
+
+	// // Configurar los getters y setters para las propiedades.
+	// for propName, getter := range properties {
+	// 	propNameCString := C.CString(propName)
+	// 	classDefinition.getProperty = getter
+	// 	// Puedes también agregar un setter si es necesario
+	// 	// classDefinition.setProperty = setter
+	// 	C.free(unsafe.Pointer(propNameCString))
+	// }
+
+	// Crear la clase en C.
+	classRef := C.JSClassCreate(&classDefinition)
+
+	// Crear el constructor de la clase.
+	constructorObject := C.JSObjectMakeConstructor(context, classRef, constructor)
+
+	// Configurar los métodos de la clase.
+	prototype := C.JSValueToObject(context, C.JSObjectGetPrototype(context, constructorObject), nil)
+	for methodName, callback := range methods {
+		methodString := C.JSStringCreateWithUTF8CString(C.CString(methodName))
+		methodObject := C.JSObjectMakeFunctionWithCallback(context, methodString, callback)
+		C.JSObjectSetProperty(context, prototype, methodString, methodObject, C.kJSPropertyAttributeNone, nil)
+		C.JSStringRelease(methodString)
+	}
+
+	// Registrar la clase en el objeto global de JavaScript.
+	classString := C.JSStringCreateWithUTF8CString(C.CString(className))
+	C.JSObjectSetProperty(context, C.JSContextGetGlobalObject(context), classString, constructorObject, C.kJSPropertyAttributeNone, nil)
+	C.JSStringRelease(classString)
+
+	// Liberar la referencia a la clase.
+	C.JSClassRelease(classRef)
+}
+
 // Apis define las API disponibles en JavaScript.
 func Apis(context C.JSGlobalContextRef, globalObject C.JSObjectRef) {
+
 	createCustomFunction(context, globalObject, "Add", C.JSObjectCallAsFunctionCallback(math.Add()))
 	createCustomFunction(context, globalObject, "Mult", C.JSObjectCallAsFunctionCallback(math.Mult()))
 	createCustomFunction(context, globalObject, "require", C.JSObjectCallAsFunctionCallback(require.Require()))
+
 	createCustomFunction(context, globalObject, "print", C.JSObjectCallAsFunctionCallback(console.Log()))
 	console_str := C.CString("console")
 	console_js := C.JSStringCreateWithUTF8CString(console_str)
 	C.free(unsafe.Pointer(console_str))
 	consoleGlobalObject := C.JSObjectMake(context, nil, nil)
 	C.JSObjectSetProperty(context, globalObject, console_js, consoleGlobalObject, C.kJSPropertyAttributeNone, nil)
+
 	createCustomFunction(context, consoleGlobalObject, "log", C.JSObjectCallAsFunctionCallback(console.Log()))
 	createCustomFunction(context, consoleGlobalObject, "time", C.JSObjectCallAsFunctionCallback(console.Time()))
 	createCustomFunction(context, consoleGlobalObject, "timeEnd", C.JSObjectCallAsFunctionCallback(console.TimeEnd()))
 	C.JSStringRelease(console_js)
+
+	methods := map[string]C.JSObjectCallAsFunctionCallback{
+		"show":   C.JSObjectCallAsFunctionCallback(builder.PubBuilderShow()),
+		"modify": C.JSObjectCallAsFunctionCallback(builder.PubBuilderModify()),
+	}
+
+	// // // Definir propiedades para la clase Builder.
+	// properties := map[string]C.JSObjectGetPropertyCallback{
+	// 	"name": C.JSObjectGetPropertyCallback(builder.BuilderGetName),
+	// 	"age":  C.JSObjectGetPropertyCallback(builder.BuilderGetAge),
+	// 	// Puedes definir más getters si es necesario
+	// }
+
+	createCustomClass(context, "Builder", C.JSObjectCallAsConstructorCallback(builder.PubBuilderConstructor()), C.JSObjectFinalizeCallback(builder.PubBuilderDestructor()), methods)
+
 }
 
 func main() {
 	// Crear un contexto JavaScript global.
 	context := C.JSGlobalContextCreate(nil)
 	globalObject := C.JSContextGetGlobalObject(context)
+
+	// builder.InitializeBuilderClass(C.JSContextRef(context))
+	// classManager(C.JSContextRef(context))
 
 	// Configurar las API en el objeto global.
 	Apis(context, globalObject)
